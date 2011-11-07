@@ -1,6 +1,6 @@
 AC_PREREQ(2.59)
 
-AC_INIT(cutter-mock, 0.0.1, y.hayamizu@gmail.com)
+AC_INIT(mockart, 0.0.1, y.hayamizu@gmail.com)
 AC_CONFIG_AUX_DIR([config])
 AC_CONFIG_HEADER([src/config.h])
 AC_CONFIG_MACRO_DIR([m4])
