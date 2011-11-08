@@ -40,8 +40,6 @@ AC_OUTPUT
 echo
 echo "Configure Result:"
 echo
-echo "  CPU arch: $ac_arch"
-echo
 echo "== required headers and libraries =="
 echo "  Cutter : $CUTTER"
 echo "    GLib : $ac_glib_2_0_available"

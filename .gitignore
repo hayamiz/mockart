@@ -1,7 +1,14 @@
 /config/*
 /configure
 Makefile.in
+Makefile
 /aclocal.m4
 /autom4te.cache/*
 /m4/*
 /src/config.h.in
+.deps
+.libs
+/libtool
+/config.status
+/src/stamp-h1
+/src/config.h
