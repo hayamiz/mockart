@@ -125,6 +125,12 @@ mockart_finish(void)
     return 0;
 }
 
+bool
+mockart_enabled(void)
+{
+    return entrance_schedule_table != NULL;
+}
+
 const char *
 mockart_failure_message(void)
 {

@@ -6,6 +6,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <dlfcn.h>
 #include <sys/types.h>
 #include <execinfo.h>
@@ -36,6 +37,8 @@ void mockart_init(void);
 
 /* returned value: 0 if no failure, -1 if any failures */
 int mockart_finish(void);
+
+bool mockart_enabled(void);
 
 const char *mockart_failure_message(void);
 
