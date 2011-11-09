@@ -5,7 +5,7 @@
 void test_mockart_just_init_finish(void);
 void test_mockart_mock_with_str_arg(void);
 void test_mockart_mock_with_str_arg_fail(void);
-
+void test_mockart_override_memcpy(void);
 
 void
 test_mockart_just_init_finish(void)
@@ -19,7 +19,6 @@ test_mockart_just_init_finish(void)
 char *
 dummy_strdup(const char *str)
 {
-    puts("ok");
     mockart_do_entrance(__func__, str, NULL);
 
     return NULL;
@@ -49,4 +48,34 @@ test_mockart_mock_with_str_arg_fail(void)
                             NULL);
 
     cut_assert_equal_int(-1, mockart_finish());
+}
+
+/* mocked memcpy */
+void *
+memcpy(void *dest, const void *src, size_t sz)
+{
+    void *(*real_memcpy)(void *, const void *, size_t) =
+        (void *(*)(void *, const void *, size_t))dlsym(RTLD_NEXT, "memcpy");
+
+    mockart_do_entrance(__func__, dest, src, sz, NULL);
+
+    puts("memcpy mocked.");
+
+    return real_memcpy(dest, src, sz);
+}
+
+void
+test_mockart_override_memcpy(void)
+{
+    mockart_init();
+
+    char buf1[64], buf2[64];
+    mockart_expect_entrance("memcpy",
+                            MOCK_ARG_PTR, buf1,
+                            MOCK_ARG_PTR, buf2,
+                            MOCK_ARG_INT, 64,
+                            NULL);
+    memcpy(buf1, buf2, 64);
+
+    cut_assert_equal_int(0, mockart_finish());
 }

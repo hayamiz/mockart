@@ -19,7 +19,7 @@ LIBADD = $(top_builddir)/src/libmockart.la
 
 test_mockart_la_SOURCES = test-mockart.c
 test_mockart_la_LIBADD = $(LIBADD)
-test_mockart_la_CFLAGS = -O0
+test_mockart_la_CFLAGS = -O0 -fno-builtin
 
 echo-cutter:
 	@echo $(CUTTER)
