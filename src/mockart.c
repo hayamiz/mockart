@@ -33,6 +33,14 @@ static char *mockart_sprintf(const char *fmt, ...){
  */
 static GHashTable *entrance_schedule_table = NULL;
 static char *fail_msg = NULL;
+static GList *expect_free_list = NULL;
+static GList *freed_list = NULL;
+
+static void
+__mockart_free_hook_func(void *ptr, const void *caller)
+{
+    freed_list = g_list_append(freed_list, ptr);
+}
 
 void mockart_init(void)
 {
@@ -43,8 +51,20 @@ void mockart_init(void)
     if (fail_msg != NULL) {
         free(fail_msg);
     }
+
+    if (expect_free_list != NULL) {
+        g_list_free(expect_free_list);
+        expect_free_list = NULL;
+    }
+
+    if (freed_list != NULL) {
+        g_list_free(freed_list);
+        freed_list = NULL;
+    }
+
     fail_msg = NULL;
     entrance_schedule_table = g_hash_table_new(g_str_hash, g_str_equal);
+    __free_hook = __mockart_free_hook_func;
 }
 
 static void
@@ -117,6 +137,19 @@ mockart_finish(void)
 
     g_hash_table_destroy(entrance_schedule_table);
     entrance_schedule_table = NULL;
+
+    if (fail_msg == NULL) {
+        GList *expect_list;
+        for(expect_list = expect_free_list;
+            expect_list != NULL;
+            expect_list = expect_list->next){
+            if (g_list_find(freed_list, expect_list->data) == NULL) {
+                fail_msg = mockart_sprintf("<%p> is expected to be free(3)ed, but actually not.",
+                                           expect_list->data);
+                break;
+            }
+        }
+    }
 
     if (fail_msg != NULL) {
         return -1;
@@ -275,4 +308,10 @@ mockart_do_entrance(const char *fname, ...)
     }
 
     va_end(args);
+}
+
+void
+mockart_expect_free(void *ptr)
+{
+    expect_free_list = g_list_append(expect_free_list, ptr);
 }

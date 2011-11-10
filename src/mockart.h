@@ -12,6 +12,7 @@
 #include <execinfo.h>
 
 #include <glib.h>
+#include <malloc.h>
 
 typedef enum {
     MOCK_ARG_SKIP = 1,
@@ -50,5 +51,6 @@ void mockart_expect_entrance(const char *fname, ...);
 
 void mockart_do_entrance(const char *fname, ...);
 
+void mockart_expect_free(void *ptr);
 
 #endif

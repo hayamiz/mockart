@@ -5,6 +5,7 @@
 void test_mockart_just_init_finish(void);
 void test_mockart_expect_entrance(void);
 void test_mockart_expect_entrance_order(void);
+void test_mockart_expect_free(void);
 
 #define MOCKART_FINISH() \
     cut_assert_equal_int(0, mockart_finish(), cut_message("%s", mockart_failure_message()));
@@ -48,4 +49,25 @@ test_mockart_expect_entrance_order(void)
     mockart_do_entrance("test", 1, NULL);
 
     cut_assert_not_equal_int(0, mockart_finish());
+}
+
+void
+test_mockart_expect_free(void)
+{
+    void *ptr;
+
+    // mockart_finish return -1 if ptr is not freed
+    mockart_init();
+    ptr = malloc(64);
+    mockart_expect_free(ptr);
+    cut_assert_not_equal_int(0, mockart_finish());
+
+    free(ptr);
+
+    // successfull case
+    mockart_init();
+    ptr = malloc(64);
+    mockart_expect_free(ptr);
+    free(ptr);
+    MOCKART_FINISH();
 }
