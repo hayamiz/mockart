@@ -4,6 +4,10 @@
 
 void test_mockart_just_init_finish(void);
 void test_mockart_expect_entrance(void);
+void test_mockart_expect_entrance_order(void);
+
+#define MOCKART_FINISH() \
+    cut_assert_equal_int(0, mockart_finish(), cut_message("%s", mockart_failure_message()));
 
 void
 test_mockart_just_init_finish(void)
@@ -26,4 +30,22 @@ test_mockart_expect_entrance(void)
     mockart_do_entrance("test", 1, "foo", NULL, 123, NULL);
 
     cut_assert_equal_int(0, mockart_finish());
+}
+
+void
+test_mockart_expect_entrance_order(void)
+{
+    mockart_init();
+
+    mockart_expect_entrance("test",
+                            MOCK_ARG_INT, 1,
+                            NULL);
+    mockart_expect_entrance("test",
+                            MOCK_ARG_INT, 2,
+                            NULL);
+
+    mockart_do_entrance("test", 2, NULL);
+    mockart_do_entrance("test", 1, NULL);
+
+    cut_assert_not_equal_int(0, mockart_finish());
 }
