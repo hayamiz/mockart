@@ -8,6 +8,9 @@ language.
 ===============
 
   * GLib 2
+    * `apt-get install libglib2.0-dev`
+  * Cutter testing framework
+    * `apt-get install cutter-testing-framework`
 
  How to build
 ==============
@@ -18,8 +21,7 @@ language.
  For developers
 ================
 
-You need autotools and libtool to build. In addition, you need Cutter
-testing framework if you want to run tests.
+You need autotools and libtool to build.
 
  How to build
 --------------
