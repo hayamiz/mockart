@@ -242,6 +242,15 @@ mockart_do_entrance(const char *fname, ...)
     if (entrance_schedule_table == NULL)
         return;
 
+    /*
+     * fail_msg != NULL means some entrance failures have already
+     * occured.  In this case, do not overwrite fail_msg because I
+     * want to focus on the first failure.
+     */
+    if (fail_msg != NULL) {
+        return;
+    }
+
     if (NULL == (mock_args_list = g_hash_table_lookup(entrance_schedule_table, fname))) {
         return;
     }
@@ -282,7 +291,7 @@ mockart_do_entrance(const char *fname, ...)
             str_arg = va_arg(args, const char *);
             if (strcmp(mock_arg->u._str, str_arg) != 0) {
                 fail_msg = mockart_sprintf("Failure on %d-th argument of '%s': "
-                                           "expected <%s> but actually <%s>",
+                                           "expected <\"%s\"> but actually <\"%s\">",
                                            i, fname,
                                            mock_arg->u._str,
                                            str_arg);
