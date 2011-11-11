@@ -1,5 +1,13 @@
 #include "mockart.h"
 
+typedef struct {
+    // file and lineno at where mockart_expect_entrance was called
+    const char *file;
+    int lineno;
+
+    GList *mock_args;
+} sched_entry_t;
+
 static char *mockart_sprintf(const char *fmt, ...){
     int n, size = 100;
     char *p;
@@ -32,7 +40,12 @@ static char *mockart_sprintf(const char *fmt, ...){
  * value: GList of GList of mockart_arg_t
  */
 static GHashTable *entrance_schedule_table = NULL;
+
+#define NR_BACKTRACE 128
 static char *fail_msg = NULL;
+static void *fail_bt_buffer[NR_BACKTRACE];
+static char **fail_bt_symbols;
+static int fail_bt_nr = 0;
 static GList *expect_free_list = NULL;
 static GList *freed_list = NULL;
 
@@ -40,6 +53,34 @@ static void
 __mockart_free_hook_func(void *ptr, const void *caller)
 {
     freed_list = g_list_append(freed_list, ptr);
+}
+
+#define __collect_backtrace()                                           \
+    {                                                                   \
+        fail_bt_nr = backtrace(fail_bt_buffer, NR_BACKTRACE);           \
+        fail_bt_symbols = backtrace_symbols(fail_bt_buffer, fail_bt_nr); \
+    }
+
+static char *
+mockart_bt_to_str(void)
+{
+    GString *str;
+    char *ret;
+    int i;
+
+    str = g_string_new("Backtrace:\n");
+    if (fail_bt_nr == 0) {
+        g_string_append(str, "  No backtrace available.");
+    } else {
+        for(i = 0; i < fail_bt_nr; i++) {
+            g_string_append_printf(str, "  %s\n", fail_bt_symbols[i]);
+        }
+    }
+
+    ret = str->str;
+    g_string_free(str, FALSE);
+
+    return ret;
 }
 
 void mockart_init(void)
@@ -71,12 +112,13 @@ static void
 mockart_finish_iterator(void *_key, void *_value, void *_user_data)
 {
     const char *fname = (const char *) _key;
-    GList *mock_args_list = (GList *) _value;
+    GList *sched_list = (GList *) _value;
+    sched_entry_t *sched_entry;
     GList *mock_args;
     mockart_arg_t *mock_arg;
     GString *msg;
 
-    if (mock_args_list == NULL) {
+    if (sched_list == NULL) {
         return;
     }
 
@@ -85,7 +127,8 @@ mockart_finish_iterator(void *_key, void *_value, void *_user_data)
     }
 
     msg = g_string_new("(");
-    mock_args = mock_args_list->data;
+    sched_entry = (sched_entry_t *)sched_list->data;
+    mock_args = sched_entry->mock_args;
 
     for(; mock_args != NULL; mock_args = mock_args->next) {
         mock_arg = (mockart_arg_t *) mock_args->data;
@@ -171,15 +214,21 @@ mockart_failure_message(void)
 }
 
 void
-mockart_expect_entrance(const char *fname, ...)
+__mockart_expect_entrance(const char *file, int lineno, const char *fname, ...)
 {
     va_list args;
-    GList *mock_args_list;
+    GList *sched_list;
+    sched_entry_t *sched_entry;
     GList *mock_args;
+
     mockart_arg_t *mock_arg;
     mockart_arg_type_t mock_arg_type;
 
-    mock_args_list = g_hash_table_lookup(entrance_schedule_table, fname);
+    sched_list = g_hash_table_lookup(entrance_schedule_table, fname);
+
+    sched_entry = malloc(sizeof(sched_entry_t));
+    sched_entry->file = file;
+    sched_entry->lineno = lineno;
     mock_args = NULL;
 
     va_start(args, fname);
@@ -218,9 +267,10 @@ mockart_expect_entrance(const char *fname, ...)
         mock_args = g_list_append(mock_args, mock_arg);
     }
 
-    mock_args_list = g_list_append(mock_args_list, mock_args);
+    sched_entry->mock_args = mock_args;
+    sched_list = g_list_append(sched_list, sched_entry);
 
-    g_hash_table_insert(entrance_schedule_table, (char *) fname, mock_args_list);
+    g_hash_table_insert(entrance_schedule_table, (char *) fname, sched_list);
 
     va_end(args);
 }
@@ -228,16 +278,21 @@ mockart_expect_entrance(const char *fname, ...)
 void
 mockart_do_entrance(const char *fname, ...)
 {
-    GList *mock_args_list;
+    GList *sched_list;
+    sched_entry_t *sched_entry;
     GList *mock_args;
+
     mockart_arg_t *mock_arg;
     va_list args;
     int i;
+    char *bt_str;
 
     int int_arg;
     long long_arg;
     const char *str_arg;
     void *ptr_arg;
+
+    GString *_fail_msg;
 
     if (entrance_schedule_table == NULL)
         return;
@@ -251,17 +306,26 @@ mockart_do_entrance(const char *fname, ...)
         return;
     }
 
-    if (NULL == (mock_args_list = g_hash_table_lookup(entrance_schedule_table, fname))) {
+    if (NULL == (sched_list = g_hash_table_lookup(entrance_schedule_table, fname))) {
         return;
     }
 
-    mock_args = (GList *) mock_args_list->data;
-    mock_args_list = g_list_remove(mock_args_list, mock_args);
-    g_hash_table_insert(entrance_schedule_table, (char *) fname, mock_args_list);
+    __collect_backtrace();
+    bt_str = mockart_bt_to_str();
+
+    _fail_msg = g_string_new("");
+
+    sched_entry = (sched_entry_t *) sched_list->data;
+    sched_list = g_list_remove(sched_list, sched_entry);
+    g_hash_table_insert(entrance_schedule_table, (char *) fname, sched_list);
+    mock_args = sched_entry->mock_args;
 
     va_start(args, fname);
 
-    for(i = 1; mock_args != NULL; mock_args = mock_args->next, i++) {
+    for(i = 1;
+        mock_args != NULL && _fail_msg->len == 0;
+        mock_args = mock_args->next, i++)
+    {
         mock_arg = (mockart_arg_t *) mock_args->data;
         switch(mock_arg->type) {
         case MOCK_ARG_SKIP: // no check
@@ -270,41 +334,41 @@ mockart_do_entrance(const char *fname, ...)
         case MOCK_ARG_INT:
             int_arg = va_arg(args, int);
             if (int_arg != mock_arg->u._int) {
-                fail_msg = mockart_sprintf("Failure on %d-th argument of '%s': "
-                                           "expected <%d> but actually <%d>",
-                                           i, fname,
-                                           mock_arg->u._int,
-                                           int_arg);
+                g_string_printf(_fail_msg, "Failure on %d-th argument of '%s': "
+                                "expected <%d> but actually <%d>\n",
+                                i, fname,
+                                mock_arg->u._int,
+                                int_arg);
             }
             break;
         case MOCK_ARG_LONG:
             long_arg = va_arg(args, long);
             if (mock_arg->u._long != long_arg) {
-                fail_msg = mockart_sprintf("Failure on %d-th argument of '%s': "
-                                           "expected <%ld> but actually <%ld>",
-                                           i, fname,
-                                           mock_arg->u._long,
-                                           long_arg);
+                g_string_printf(_fail_msg, "Failure on %d-th argument of '%s': "
+                                "expected <%ld> but actually <%ld>\n",
+                                i, fname,
+                                mock_arg->u._long,
+                                long_arg);
             }
             break;
         case MOCK_ARG_STR:
             str_arg = va_arg(args, const char *);
             if (strcmp(mock_arg->u._str, str_arg) != 0) {
-                fail_msg = mockart_sprintf("Failure on %d-th argument of '%s': "
-                                           "expected <\"%s\"> but actually <\"%s\">",
-                                           i, fname,
-                                           mock_arg->u._str,
-                                           str_arg);
+                g_string_printf(_fail_msg, "Failure on %d-th argument of '%s': "
+                                "expected <\"%s\"> but actually <\"%s\">\n",
+                                i, fname,
+                                mock_arg->u._str,
+                                str_arg);
             }
             break;
         case MOCK_ARG_PTR:
             ptr_arg = va_arg(args, void *);
             if (mock_arg->u._ptr != ptr_arg) {
-                fail_msg = mockart_sprintf("Failure on %d-th argument of '%s': "
-                                           "expected <%p> but actually <%p>",
-                                           i, fname,
-                                           mock_arg->u._ptr,
-                                           ptr_arg);
+                g_string_printf(_fail_msg, "Failure on %d-th argument of '%s': "
+                                "expected <%p> but actually <%p>\n",
+                                i, fname,
+                                mock_arg->u._ptr,
+                                ptr_arg);
             }
             break;
         default:
@@ -317,6 +381,19 @@ mockart_do_entrance(const char *fname, ...)
     }
 
     va_end(args);
+
+    if (_fail_msg->len > 0) {
+        g_string_append_printf(_fail_msg,
+                               "  Expected at %s:%d\n",
+                               sched_entry->file, sched_entry->lineno);
+        g_string_append(_fail_msg, bt_str);
+        fail_msg = strdup(_fail_msg->str);
+    }
+
+    g_string_free(_fail_msg, TRUE);
+    g_list_free(sched_entry->mock_args);
+    free(sched_entry);
+    free(bt_str);
 }
 
 void
