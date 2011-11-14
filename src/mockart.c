@@ -1,4 +1,5 @@
 #include "mockart.h"
+#include <glib.h>
 
 typedef struct {
     // file and lineno at where mockart_expect_entrance was called

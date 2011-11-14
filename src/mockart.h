@@ -11,7 +11,6 @@
 #include <sys/types.h>
 #include <execinfo.h>
 
-#include <glib.h>
 #include <malloc.h>
 #include <execinfo.h>
 
